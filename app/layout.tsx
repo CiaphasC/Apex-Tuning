@@ -18,6 +18,11 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: "Apex Tuning | Taller 3D",
   description: "Apex Tuning: experiencia 3D automotriz en Next.js + React + TypeScript.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
