@@ -1,0 +1,443 @@
+import React, { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { Mail, Phone, ChevronRight, Settings, Zap, Shield, AlertTriangle } from 'lucide-react';
+
+// --- ICONOS PREMIUM CUSTOM (Estilo Minimalista/Neon tipo icons0.dev) ---
+const PremiumZap = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 drop-shadow-[0_0_15px_rgba(255,0,51,0.9)]">
+    {/* Envoltorio geométrico (Hexágono estilo UI Premium Tech) */}
+    <path d="M12 2L20.5 7V17L12 22L3.5 17V7L12 2Z" stroke="#ff0033" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3"/>
+    {/* Rayo afilado, asimétrico y detallado */}
+    <path d="M13.5 5L6.5 13H11.5L10 19L17.5 10H12.5L13.5 5Z" fill="#ff0033" fillOpacity="0.2" stroke="#ff0033" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    {/* Detalle de interfaz animado */}
+    <circle cx="12" cy="12" r="1" fill="#ff0033" className="animate-ping" opacity="0.8"/>
+  </svg>
+);
+
+const PremiumSuspension = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 drop-shadow-[0_0_15px_rgba(255,0,51,0.9)]">
+    <path d="M12 2L20.5 7V17L12 22L3.5 17V7L12 2Z" stroke="#ff0033" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3"/>
+    {/* Coilover / Amortiguador real en lugar de un escudo genérico */}
+    <path d="M12 5V8M12 16V19M9 8H15M9 16H15" stroke="#ff0033" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M10 8L14 10.5L10 13.5L14 16" stroke="#ff0033" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const PremiumTurbo = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 drop-shadow-[0_0_15px_rgba(255,0,51,0.9)]">
+    <path d="M12 2L20.5 7V17L12 22L3.5 17V7L12 2Z" stroke="#ff0033" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3"/>
+    {/* Silueta asimétrica y afilada de Turbo */}
+    <path d="M13.5 17C16.5376 17 19 14.5376 19 11.5C19 8.46243 16.5376 6 13.5 6C10.4624 6 8 8.46243 8 11.5C8 13.6231 9.20233 15.464 10.9984 16.3664L13 19.5H7.5" stroke="#ff0033" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="13.5" cy="11.5" r="2" stroke="#ff0033" strokeWidth="1.5"/>
+  </svg>
+);
+
+const PremiumLogo = () => (
+  <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10 drop-shadow-[0_0_15px_rgba(255,0,51,0.7)] transition-all duration-500 group-hover:scale-110">
+    {/* Perfil aerodinámico/Casco de carreras */}
+    <path d="M28 32 C28 32 32 28 32 20 C32 10 24 6 18 6 C10 6 6 12 6 20 C6 28 10 32 16 32" stroke="#ff0033" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M6 20 L18 20 C22 20 24 18 24 14" stroke="#ff0033" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="20" cy="26" r="2" fill="#ff0033" className="animate-pulse"/>
+  </svg>
+);
+
+
+// --- DATOS DE LAS VISTAS ---
+const views = [
+  {
+    id: 'dyno',
+    title: 'Dyno Tuning',
+    subtitle: 'SERVICIO 01',
+    description: 'Medición precisa de potencia y torque en nuestro dinamómetro de última generación. Optimización completa de rendimiento.',
+    icon: PremiumZap,
+    tags: ['Reprogramación', 'Logs', 'Dyno', 'ECU'],
+    camera: { position: [-6, 2.5, 6], target: [0, 0.5, 0] },
+  },
+  {
+    id: 'suspension',
+    title: 'Suspensión & Rines',
+    subtitle: 'SERVICIO 04',
+    description: 'Coilovers, muelles deportivos, barras estabilizadoras. Rines forjados y llantas de alto rendimiento para máximo grip.',
+    icon: PremiumSuspension,
+    tags: ['Coilovers', 'KW', 'BC Racing', 'Forged Wheels'],
+    camera: { position: [3, 1.0, 4.5], target: [1.2, 0.3, 1] }, 
+  },
+  {
+    id: 'turbo',
+    title: 'Inducción Forzada',
+    subtitle: 'SERVICIO 03',
+    description: 'Kits de turbo y supercargador. Intercoolers de alto rendimiento, blow-off valves y wastegates para máximo boost.',
+    icon: PremiumTurbo,
+    tags: ['Turbo', 'Supercharger', 'Intercooler', 'BOV'],
+    camera: { position: [4, 1.5, -5], target: [0, 0.5, -1] }, 
+  }
+];
+
+export default function App() {
+  const mountRef = useRef(null);
+  const [activeViewIndex, setActiveViewIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [modelError, setModelError] = useState(false);
+
+  const targetPosRef = useRef(new THREE.Vector3(...views[0].camera.position));
+  const targetLookRef = useRef(new THREE.Vector3(...views[0].camera.target));
+
+  // --- CONTROLADOR DE SCROLL ---
+  useEffect(() => {
+    let isThrottled = false;
+
+    const handleScroll = (e) => {
+      if (isThrottled || isLoading || modelError) return;
+      isThrottled = true;
+
+      if (e.deltaY > 0) {
+        setActiveViewIndex((prev) => (prev + 1) % views.length);
+      } else {
+        setActiveViewIndex((prev) => (prev - 1 + views.length) % views.length);
+      }
+
+      setTimeout(() => { isThrottled = false; }, 1200);
+    };
+
+    window.addEventListener('wheel', handleScroll);
+    return () => window.removeEventListener('wheel', handleScroll);
+  }, [isLoading, modelError]);
+
+  useEffect(() => {
+    const view = views[activeViewIndex];
+    targetPosRef.current.set(view.camera.position[0], view.camera.position[1], view.camera.position[2]);
+    targetLookRef.current.set(view.camera.target[0], view.camera.target[1], view.camera.target[2]);
+  }, [activeViewIndex]);
+
+  // --- MOTOR 3D ---
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#030303');
+    scene.fog = new THREE.FogExp2('#030303', 0.04); 
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(...views[0].camera.position);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2; 
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Mapa de Entorno para reflejos metálicos
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const envScene = new THREE.Scene();
+    const envLight = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({color: 0xffffff}));
+    envLight.position.set(0, 10, 0);
+    envLight.rotation.x = Math.PI / 2;
+    envScene.add(envLight);
+    scene.environment = pmremGenerator.fromScene(envScene).texture;
+
+    // Luces
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5); 
+    scene.add(ambientLight);
+
+    const mainLight = new THREE.DirectionalLight(0xe0f2fe, 4); 
+    mainLight.position.set(-5, 8, 5);
+    scene.add(mainLight);
+
+    const backRedLight = new THREE.DirectionalLight(0xff0033, 6);
+    backRedLight.position.set(5, 4, -8);
+    scene.add(backRedLight);
+
+    // Piso reflejante y Neones
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.02, metalness: 0.95 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    scene.add(floor);
+
+    const createNeon = (x, y, z, rotZ, colorHex) => {
+      const neonMat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const neon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 20, 16), neonMat);
+      neon.position.set(x, y, z);
+      neon.rotation.z = rotZ;
+      scene.add(neon);
+      const pl = new THREE.PointLight(colorHex, 10, 20);
+      pl.position.set(x, 1, z);
+      scene.add(pl);
+    };
+    createNeon(-5, 5, -10, 0.5, 0xffffff); 
+    createNeon(5, 5, -10, -0.5, 0xff0033); 
+    createNeon(0, 8, -12, 0, 0xffffff);    
+
+    // Cargar Coche 3D
+    const carGroup = new THREE.Group();
+    scene.add(carGroup);
+    const wheels = []; 
+
+    const PUBLIC_CAR_MODEL = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/models/gltf/ferrari.glb'; 
+
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+
+    loader.load(
+      PUBLIC_CAR_MODEL,
+      (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(1.4, 1.4, 1.4); 
+        model.position.set(0, 0, 0);
+        model.rotation.y = Math.PI;
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+
+            if (child.material) {
+              child.material.envMapIntensity = 2.5; 
+              child.material.needsUpdate = true;
+            }
+
+            const meshName = child.name.toLowerCase();
+            const matName = child.material?.name?.toLowerCase() || '';
+
+            if (meshName.includes('body') || matName.includes('body') || matName.includes('paint')) {
+              child.material = new THREE.MeshPhysicalMaterial({
+                color: 0x111111, metalness: 0.8, roughness: 0.1, clearcoat: 1.0, clearcoatRoughness: 0.02, envMapIntensity: 4.0 
+              });
+            }
+            if (meshName.includes('glass') || matName.includes('glass')) {
+              child.material = new THREE.MeshPhysicalMaterial({
+                color: 0x000000, metalness: 0.9, roughness: 0.0, transparent: true, opacity: 0.7, envMapIntensity: 4.0 
+              });
+            }
+            if (meshName.includes('wheel') || meshName.includes('tire') || meshName.includes('rim')) {
+              if (matName.includes('rim')) {
+                 child.material = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9, roughness: 0.2, envMapIntensity: 2.0 });
+              }
+              let wheelNode = child;
+              while (wheelNode.parent && !wheelNode.name.toLowerCase().includes('wheel')) {
+                wheelNode = wheelNode.parent;
+              }
+              if (wheelNode.name.toLowerCase().includes('wheel') && !wheels.includes(wheelNode)) {
+                wheels.push(wheelNode);
+              }
+            }
+            if (matName.includes('brake')) {
+               child.material.color.setHex(0xff0000); 
+               child.material.emissive.setHex(0x550000); 
+            }
+          }
+        });
+        
+        carGroup.add(model);
+        setIsLoading(false);
+      },
+      undefined, 
+      (error) => { 
+        setIsLoading(false);
+        setModelError(true); 
+      }
+    );
+
+    let animationId;
+    const currentLookAt = new THREE.Vector3(...views[0].camera.target);
+    const clock = new THREE.Clock();
+
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      camera.position.lerp(targetPosRef.current, 0.04);
+      currentLookAt.lerp(targetLookRef.current, 0.05);
+      camera.lookAt(currentLookAt);
+
+      if (wheels.length > 0 && !isLoading && !modelError) {
+        wheels.forEach(wheel => { wheel.rotation.z -= 10 * delta; });
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationId);
+      pmremGenerator.dispose();
+      dracoLoader.dispose();
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+    };
+  }, []);
+
+  const activeView = views[activeViewIndex];
+  const ActiveIcon = activeView.icon;
+
+  return (
+    <div className="relative w-full h-screen bg-black overflow-hidden text-slate-200" style={{ fontFamily: "'Inter', sans-serif" }}>
+      
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+          .font-serif-playfair { font-family: 'Playfair Display', serif; }
+        `}
+      </style>
+
+      {/* PANTALLA DE CARGA */}
+      {isLoading && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md">
+          <div className="w-16 h-16 mb-8 border-4 border-red-900 border-t-red-500 rounded-full animate-spin"></div>
+          <h2 className="text-white tracking-[0.3em] text-sm font-bold uppercase mb-2">Cargando Taller 3D</h2>
+          <p className="text-gray-500 text-xs tracking-widest">Descargando modelo de alta resolución...</p>
+        </div>
+      )}
+
+      {/* MENSAJE DE ERROR */}
+      {modelError && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md px-6 text-center">
+          <svg viewBox="0 0 24 24" fill="none" className="w-16 h-16 text-red-500 mb-6 drop-shadow-[0_0_15px_rgba(255,0,0,0.5)]">
+             <path d="M12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C17.523 2 22 6.477 22 12C22 17.523 17.523 22 12 22ZM12 8V13M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <h2 className="text-white tracking-[0.2em] text-xl font-bold uppercase mb-4">Error de Conexión</h2>
+          <p className="text-gray-400 text-sm max-w-md leading-relaxed mb-6">
+            Tu navegador o red está bloqueando la descarga del modelo 3D externo (CORS). 
+            Asegúrate de alojar el archivo <code>.glb</code> en el mismo servidor de tu página web.
+          </p>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <header className="absolute top-0 left-0 w-full z-10 p-6 flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent pointer-events-auto">
+        
+        {/* LOGO PREMIUM LINE ART */}
+        <div className="flex flex-col items-center group cursor-pointer">
+          <div className="relative flex items-center justify-center">
+            <PremiumLogo />
+          </div>
+          <span className="font-black text-[11px] tracking-[0.4em] text-white mt-2 uppercase group-hover:text-red-500 transition-colors duration-500 drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]">
+            PHENOM
+          </span>
+        </div>
+        
+        <nav className="hidden md:flex gap-8 text-[11px] font-bold tracking-widest">
+          <a href="#" className="text-white hover:text-red-500 transition-colors">INICIO</a>
+          <a href="#" className="text-white hover:text-red-500 transition-colors">NOSOTROS</a>
+          <a href="#" className="text-white hover:text-red-500 transition-colors">SERVICIOS</a>
+          <a href="#" className="text-white hover:text-red-500 transition-colors">TRABAJOS</a>
+          <a href="#" className="text-white hover:text-red-500 transition-colors">TESTIMONIOS</a>
+          <a href="#" className="text-white hover:text-red-500 transition-colors">CONTACTO</a>
+        </nav>
+
+        <button className="border border-red-600/50 text-white hover:bg-red-600/20 px-5 py-2.5 text-[11px] font-bold tracking-widest transition-all flex items-center gap-2 backdrop-blur-sm shadow-[0_0_10px_rgba(255,0,0,0.1)] hover:shadow-[0_0_20px_rgba(255,0,0,0.3)]">
+          AGENDAR CITA <span className="text-red-500 ml-1">→</span>
+        </button>
+      </header>
+
+      {/* RENDER CONTENEDOR 3D */}
+      <div ref={mountRef} className="absolute inset-0 z-0" />
+
+      {/* INDICADOR DE SCROLL PREMIUM */}
+      {!isLoading && !modelError && (
+        <div className="absolute top-[12%] md:top-[16%] left-1/2 -translate-x-1/2 z-10 flex flex-col items-center pointer-events-none transition-opacity duration-1000">
+           <span className="text-[9px] tracking-[0.3em] uppercase text-white/60 mb-4 font-semibold drop-shadow-md">
+             Haz Scroll para explorar
+           </span>
+           
+           {/* Pista o contenedor de la línea */}
+           <div className="relative w-[2px] h-20 md:h-28 bg-white/10 rounded-full overflow-hidden shadow-[inset_0_0_5px_rgba(0,0,0,0.5)]">
+             {/* Línea activa (Neón rojo) que sube y baja */}
+             <div 
+               className="absolute top-0 left-0 w-full bg-gradient-to-b from-[#ff0033] to-[#8b0000] rounded-full transition-transform duration-700 ease-in-out shadow-[0_0_10px_rgba(255,0,51,0.8)]"
+               style={{ 
+                 height: `${100 / views.length}%`,
+                 transform: `translateY(${activeViewIndex * 100}%)`
+               }}
+             />
+           </div>
+
+           {/* Contador digital premium (01 / 03) */}
+           <div className="mt-4 flex flex-col items-center gap-1.5 opacity-80">
+              <span className="text-[10px] text-red-500 font-bold font-mono tracking-widest">
+                0{activeViewIndex + 1}
+              </span>
+              <div className="w-3 h-[1px] bg-white/20"></div>
+              <span className="text-[9px] text-white/40 font-mono tracking-widest">
+                0{views.length}
+              </span>
+           </div>
+        </div>
+      )}
+
+      {/* TARJETA DE UI LATERAL */}
+      {!isLoading && !modelError && (
+        <div className="absolute top-1/2 -translate-y-1/2 right-12 z-10 w-[420px] pointer-events-auto transition-opacity duration-1000">
+          <div className="bg-[#050505]/60 backdrop-blur-xl border border-white/5 shadow-2xl overflow-hidden p-8 rounded-sm">
+            
+            <div className="flex items-center gap-5 mb-6">
+               {/* Contenedor de Icono Premium idéntico a la imagen de referencia */}
+               <div className="w-12 h-12 bg-[#1a0505]/80 border border-red-600/40 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(255,0,0,0.15)]">
+                 <ActiveIcon />
+               </div>
+               <span className="text-red-500 font-bold tracking-[0.2em] text-[10px] uppercase drop-shadow-[0_0_8px_rgba(255,0,0,0.8)]">
+                 {activeView.subtitle}
+               </span>
+            </div>
+
+            <h2 className="text-4xl text-white mb-4 font-serif-playfair tracking-wide">
+              {activeView.title}
+            </h2>
+            <p className="text-gray-400 text-sm leading-relaxed mb-8 font-light">
+              {activeView.description}
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              {activeView.tags.map((tag, idx) => (
+                <span key={idx} className="inline-flex items-center border border-red-900/40 bg-red-950/30 px-3 py-1.5 text-[11px] font-medium text-red-400 tracking-wide rounded-sm backdrop-blur-sm">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Paginador Inferior */}
+      {!isLoading && !modelError && (
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 pointer-events-auto">
+          {[...Array(views.length)].map((_, idx) => (
+            <button 
+              key={idx}
+              onClick={() => setActiveViewIndex(idx)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === activeViewIndex ? 'bg-red-500 scale-125 shadow-[0_0_10px_rgba(255,0,0,0.8)]' : 'bg-gray-700 hover:bg-gray-500'}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ICONO DE WHATSAPP PREMIUM GLASSMORPHIC */}
+      <div className="absolute bottom-8 left-8 z-20 pointer-events-auto group">
+        <div className="relative w-14 h-14 bg-white/5 backdrop-blur-md rounded-full flex items-center justify-center cursor-pointer border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.4)] transition-all duration-300 group-hover:bg-white/10 group-hover:border-white/20 group-hover:shadow-[0_0_25px_rgba(37,211,102,0.3)]">
+          {/* Logo oficial de WhatsApp vectorizado */}
+          <svg viewBox="0 0 24 24" className="w-7 h-7 fill-white/80 group-hover:fill-[#25D366] transition-colors duration-300 drop-shadow-sm">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+          </svg>
+        </div>
+      </div>
+
+    </div>
+  );
+}
